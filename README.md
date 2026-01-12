@@ -3,23 +3,11 @@
 ```markdown
 # BkyhBot (BKYH机器人框架)
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-8.0%2B-purple.svg)](https://dotnet.microsoft.com/)
-[![OneBot](https://img.shields.io/badge/OneBot-v11-green.svg)](https://11.onebot.dev/)
-
-**BkyhBot** 是一个基于 **C#** 编写的轻量级 QQ 机器人开发框架。它专为对接 **NapCat** (基于 NTQQ 的 OneBot 11 实现) 而设计，采用 **反向 WebSocket** 通信模式。
-
-与常见的 ASP.NET 框架不同，BkyhBot 摒弃了沉重的 Web 依赖，使用原生的 `HttpListener` 实现高效、低占用的一键启动。
-
----
-
 ## ✨ 核心特性
 
-- **🚀 轻量级核心**：不依赖 ASP.NET Core，极低的内存占用，适合在低配服务器或树莓派上运行。
 - **🔌 插件系统**：内置泛型插件基类 `Plug<T>`，支持**配置文件自动生成**、**自动加载**和**热插拔**（逻辑上）。
 - **⚡ 反向 WebSocket**：支持 Token 鉴权、多账号隔离（指定 QQ 号连接）。
 - **🛠️ 开发者友好**：高度封装的 `BotActionSender`，让发送群消息、图片、混合消息变得像说话一样简单。
-- **🎨 绘图支持**：(可选) 集成 SkiaSharp，支持将文字动态渲染为精美图片卡片。
 
 ---
 
