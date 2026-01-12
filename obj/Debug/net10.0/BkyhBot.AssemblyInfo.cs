@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("快速构建qq机器人")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1b31f74a7e37cde87542c39b7e5e582463222637")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dab65c9f019901f58fa9a5fb579423b8cb1801ad")]
 [assembly: System.Reflection.AssemblyProductAttribute("BkyhBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BkyhBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

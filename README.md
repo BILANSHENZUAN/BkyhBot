@@ -1,88 +1,54 @@
-### README.md
+###  README.md
 
 ```markdown
-# BkyhBot (BKYH机器人框架)
+# BkyhBot (不可名状的机器人框架)
 
-## ✨ 核心特性
+[![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
+[![OneBot](https://img.shields.io/badge/OneBot-v11-green.svg)](https://11.onebot.dev/)
 
-- **🔌 插件系统**：内置泛型插件基类 `Plug<T>`，支持**配置文件自动生成**、**自动加载**和**热插拔**（逻辑上）。
-- **⚡ 反向 WebSocket**：支持 Token 鉴权、多账号隔离（指定 QQ 号连接）。
-- **🛠️ 开发者友好**：高度封装的 `BotActionSender`，让发送群消息、图片、混合消息变得像说话一样简单。
-
----
-
-## 📦 快速开始
-
-### 1. 环境准备
-
-- [NapCatQQ](https://github.com/NapNeko/NapCatQQ) (或其他 OneBot 11 实现)
-- .NET 8.0 SDK 或更高版本
-
-### 2. 配置 NapCat
-
-在 NapCat 的 WebUI 或配置文件中，启用 **反向 WebSocket** 并设置地址：
-
-- **URL**: `ws://127.0.0.1:3001/` (注意端口要与 BkyhBot 一致)
-- **Token**: (可选，建议配置)
-
-### 3. 创建你的第一个机器人
-
-```csharp
-using BkyhBot.BotConnect;
-using BkyhBot.Class;
-
-// 1. 配置连接信息
-var config = new Config 
-{
-    Url = "http://*:3001/",   // 监听地址
-    BotQq = 123456789,        // (可选) 仅允许指定 QQ 连接
-    Token = "your_token"      // (可选) 鉴权 Token
-};
-
-// 2. 初始化框架
-var bot = new BotConnect(config);
-
-// 3. 注册简单的日志事件
-bot.OnLog += Console.WriteLine;
-
-// 4. 加载插件 (示例)
-var myPlugin = new MyPlugin("Plug/MyPlugin.json", bot);
-myPlugin.Start();
-
-// 5. 启动服务
-await bot.Start();
-
-// 保持运行
-await Task.Delay(-1);
-
-```
+**BkyhBot** 是一个专为 **NapCat/OneBot 11** 设计的轻量级 C# 机器人驱动框架。它采用插件化架构，支持高度自定义的消息处理和动作执行。
 
 ---
 
-## 🧩 插件开发指南
+## 🛠️ 架构特色
 
-BkyhBot 拥有优雅的插件开发体验。你只需要继承 `Plug<T>`，框架会自动帮你处理配置文件的读写。
+### 1. 规范化的插件配置系统
+项目采用了**“配置继承”**的设计模式。所有的插件配置类都继承自统一的基础信息类，确保了插件管理的标准化。
 
-### 第一步：定义配置类
+- **`PlugMessage` (基类)**：定义插件的开关、名称、功能描述等元数据。
+- **`CustomConfig` (子类)**：继承基类并扩展插件特有的业务参数（如群号、黑名单、API Key等）。
 
+### 2. 自动化生命周期管理
+- **自动加载**：基类 `Plug<T>` 自动根据类名在 `Plug/` 目录下寻找对应的 JSON 配置文件。
+- **自动初始化**：如果配置文件不存在，框架会根据配置类的默认值自动生成，实现“零配置”上手。
+
+### 3. 灵活的消息驱动
+- **强类型事件**：将 OneBot 的原始 JSON 转换为 C# 强类型对象，支持 LINQ 操作。
+- **多媒体支持**：内置 CQ 码封装，支持图片、语音、闪照以及图文混合消息。
+
+---
+
+## 💻 代码示例：插件开发
+
+得益于配置继承，开发一个新插件非常简单：
+
+### 第一步：定义配置 (继承模式)
 ```csharp
-public class EchoConfig
+// 插件特有的配置信息
+public class MyActionConfig : PlugMessage // 继承插件基本信息类
 {
-    public PlugMessage Message { get; set; } = new PlugMessage();
-    public long[] GroupIds { get; set; } = Array.Empty<long>(); // 开启的群号
+    public long[] TargetGroups { get; set; } = []; // 业务特有参数
+    public string ReplyText { get; set; } = "Hello World!";
 }
 
 ```
 
-### 第二步：编写插件逻辑
+### 第二步：编写业务逻辑
 
 ```csharp
-using BkyhBot.Plugins;
-
-public class EchoPlugin : Plug<EchoConfig>
+public class MyAction : Plug<MyActionConfig>
 {
-    // 构造函数：接收路径和 Bot 实例
-    public EchoPlugin(string configPath, BotConnect bot)
+    public MyAction(string configPath, BotConnect bot)
     {
         ConfigPath = configPath;
         Bot = bot;
@@ -90,77 +56,54 @@ public class EchoPlugin : Plug<EchoConfig>
 
     public override void Start()
     {
-        // 1. 自动加载配置 (如果文件不存在会自动创建)
         LoadConfig(ConfigPath);
         
-        // 2. 检查插件开关
-        if (!Message.Message.PlugIsOpen) return;
+        // 使用继承自基类的开关
+        if (!Message.PlugIsOpen) return;
 
-        // 3. 注册消息事件
-        Bot.OnGroupMessageReceived += OnGroupMessage;
-        Console.WriteLine($"[Echo] 插件启动，监听 {Message.GroupIds.Length} 个群");
-    }
-
-    private async void OnGroupMessage(GroupMessageEvent e)
-    {
-        // 业务逻辑：复读消息
-        if (Message.GroupIds.Contains(e.GroupId) && e.RawMessage == "复读")
-        {
-            // 使用高度封装的 Sender 发送消息
-            await Bot.Sender.SendGroupMessage(e.GroupId, "复读成功！");
-        }
+        Bot.OnGroupMessageReceived += async (e) => {
+            if (Message.TargetGroups.Contains(e.GroupId)) {
+                await Bot.Sender.SendGroupMessage(e.GroupId, Message.ReplyText);
+            }
+        };
     }
 }
 
 ```
 
-### 插件配置文件示例
+---
 
-运行一次后，会自动在 `Plug/` 目录下生成 `EchoPlugin.json`：
+## 🚀 快速开始
 
-```json
-{
-  "Message": {
-    "PlugIsOpen": true,
-    "PlugName": "插件名称",
-    "Description": "插件描述"
-  },
-  "GroupIds": []
-}
+1. **配置 NapCat**：开启反向 WebSocket，连接地址指向 `ws://你的服务器IP:端口/`。
+2. **初始化项目**：
+```csharp
+var config = new Config { Url = "http://*:3001/", BotQq = 123456789 };
+var bot = new BotConnect(config);
+
+// 实例化并启动插件
+new MyAction("Plug/MyAction.json", bot).Start();
+
+await bot.Start();
 
 ```
 
----
 
-## 🛠️ 核心 API 说明
-
-### `BotActionSender`
-
-每个机器人连接都有一个独立的 Sender，支持以下快捷操作：
-
-* `SendGroupMessage(groupId, msg)`: 发送群消息
-* `SendPrivateMessage(userId, msg)`: 发送私聊
-* `SendGroupImage(groupId, url/path)`: 发送群图片
-* `SendGroupMixedMessage(...)`: 发送图文混合消息
-* `DeleteMessage(msgId)`: 撤回消息
 
 ---
 
-## 🤝 贡献与交流
+## 📂 项目结构
 
-欢迎提交 Issue 或 Pull Request 来改进 BkyhBot！
+* `BotConnect/`: 核心连接管理，负责 WebSocket 握手与消息分发。
+* `BotAction/`: 动作执行器，封装了所有 OneBot API。
+* `Plugins/`: 插件基类与接口定义。
+* `Class/`: 实体模型与配置信息类。
 
 ---
 
-## 📄 开源协议
+## 📄 开源说明
 
-本项目采用 [MIT License](https://www.google.com/search?q=LICENSE) 开源。
+本项目采用 MIT 协议开源。欢迎提交 Issue 和 PR 共同完善。
 
 ```
-
-### 使用建议：
-1.  **复制内容**：将上面的代码块直接复制到你项目根目录的 `README.md` 文件中。
-2.  **修改链接**：如果你的 GitHub 仓库地址确定了，可以把 Badge 里的链接换成真实的仓库地址。
-3.  **补充图片**：你可以截一张你的机器人运行时的控制台日志截图，或者机器人回复消息的截图，放在 README 里，会不仅让项目看起来更专业，也能直观展示功能。
-
-```
+`````
