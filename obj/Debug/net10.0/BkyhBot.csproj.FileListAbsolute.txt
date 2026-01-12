@@ -1,0 +1,13 @@
+E:\code\BkyhBot\BkyhBot\BkyhBot\bin\Debug\net10.0\BkyhBot.deps.json
+E:\code\BkyhBot\BkyhBot\BkyhBot\bin\Debug\net10.0\BkyhBot.dll
+E:\code\BkyhBot\BkyhBot\BkyhBot\bin\Debug\net10.0\BkyhBot.pdb
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.csproj.AssemblyReference.cache
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.GeneratedMSBuildEditorConfig.editorconfig
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.AssemblyInfoInputs.cache
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.AssemblyInfo.cs
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.csproj.CoreCompileInputs.cache
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.sourcelink.json
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.dll
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\refint\BkyhBot.dll
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.pdb
+E:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\ref\BkyhBot.dll
