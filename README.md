@@ -1,6 +1,3 @@
-###  README.md
-
-```markdown
 # BkyhBot (BKYH机器人框架)
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
