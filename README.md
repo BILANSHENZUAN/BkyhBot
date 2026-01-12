@@ -1,7 +1,7 @@
 ###  README.md
 
 ```markdown
-# BkyhBot (不可名状的机器人框架)
+# BkyhBot (BKYH机器人框架)
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![OneBot](https://img.shields.io/badge/OneBot-v11-green.svg)](https://11.onebot.dev/)
