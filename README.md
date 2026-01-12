@@ -1,7 +1,7 @@
 ### README.md
 
 ```markdown
-# BkyhBot (不可名状的机器人框架)
+# BkyhBot (BKYH机器人框架)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0%2B-purple.svg)](https://dotnet.microsoft.com/)
