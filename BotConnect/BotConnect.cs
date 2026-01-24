@@ -9,127 +9,157 @@ using Newtonsoft.Json.Linq;
 
 namespace BkyhBot.BotConnect;
 
-/// <summary>
-/// 机器人连接管理类：负责监听 WebSocket 连接并分发消息
-/// </summary>
 public class BotConnect
 {
+	#region 私有字段
+
 	private HttpListener? _listener;
-
 	private CancellationTokenSource? _cts;
+	private readonly ConcurrentDictionary<string, WebSocket> _activeBots = new();
+	private static BotConnect? _instance;
 
-	// 使用并发字典存储活跃的机器人连接，确保线程安全
-	private readonly ConcurrentDictionary<long, WebSocket> _activeBots = new();
+	#endregion
 
-	// 只读配置，确保运行期间配置不被外部篡改
-	private readonly Config _config;
-	public Config Config => _config;
+	#region 公共属性
 
-	// 插件信息列表
+	public Config Config { get; private set; }
 	public List<PlugMessage> PlugMessageList { get; set; } = new();
-
-	// 操作发送器：用于向机器人发送动作（如发消息）
 	public BotActionSender Sender { get; private set; }
+	public static BotConnect Instance => _instance!;
 
-	// ================== 事件定义 ==================
+	#endregion
+
+	#region 事件定义
+
 	public event Action<GroupMessageEvent>? OnGroupMessageReceived;
-	public event Action<JObject, long>? OnOtherEventReceived;
+	public event Action<JObject, string>? OnOtherEventReceived;
 	public event Action<string>? OnLog;
 	public event Action? BotOnline;
 	public event Action<BotConnect>? StartFinish;
 
-	// 单例模式（按需保留，但建议通过依赖注入管理）
-	private static BotConnect? _instance;
-	public static BotConnect Instance => _instance!;
+	#endregion
 
-	/// <summary>
-	/// 构造函数：初始化配置与校验
-	/// </summary>
+	public BotConnect() : this(LoadOrInitConfig())
+	{
+	}
+
 	public BotConnect(Config config)
 	{
+		if (_instance != null) return;
 		_instance = this;
-		_config = config ?? throw new ArgumentNullException(nameof(config));
+		Config = config ?? throw new ArgumentNullException(nameof(config));
 
-		// 校验并格式化监听地址
-		if (string.IsNullOrWhiteSpace(_config.Url))
-			throw new ArgumentException("配置中的监听 URL 不能为空");
+		if (string.IsNullOrWhiteSpace(Config.Url)) throw new ArgumentException("监听 URL 不能为空");
+		if (!Config.Url.EndsWith("/")) Config.Url += "/";
 
-		if (!_config.Url.EndsWith("/"))
-			_config.Url += "/";
-
-		// 预初始化发送器，防止空引用
-		long initialId = _config.BotQq ?? 0;
+		string initialId = Config.BotQq ?? "";
 		Sender = new BotActionSender(_activeBots, Log, initialId);
 	}
 
 	/// <summary>
-	/// 启动异步监听服务
+	/// [极简版] 直接使用相对路径加载配置
+	/// <para>注意：调试时请将 VS 的工作目录设置为 $(ProjectDir)</para>
 	/// </summary>
+	private static Config LoadOrInitConfig()
+	{
+		// 1. 直接指定相对路径
+		// 程序会在 "当前工作目录/Configs/Config.json" 寻找
+		string configPath = Path.Combine("Configs", "Config.json");
+
+		// 打印一下绝对路径，方便欧尼酱确认它到底在哪
+		Console.WriteLine($"[系统] 配置文件路径: {Path.GetFullPath(configPath)}");
+
+		// 2. 如果文件不存在，自动创建
+		if (!File.Exists(configPath))
+		{
+			try
+			{
+				// 确保文件夹存在
+				string dir = Path.GetDirectoryName(configPath)!;
+				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+					Directory.CreateDirectory(dir);
+
+				var defaultConfig = new Config
+				{
+					Url = "http://127.0.0.1:3001/",
+					BotQq = "123456789",
+					MasterQq = "987654321",
+					PlugConfigPath = "Plugins/"
+				};
+
+				string json = JsonConvert.SerializeObject(defaultConfig, Formatting.Indented);
+				File.WriteAllText(configPath, json);
+
+				throw new FileNotFoundException(
+					$"[初次运行] 已生成配置文件：{Path.GetFullPath(configPath)}\n请修改配置后重启程序。"
+				);
+			}
+			catch (Exception ex) when (ex is not FileNotFoundException)
+			{
+				throw new Exception($"无法创建配置文件: {ex.Message}");
+			}
+		}
+
+		// 3. 读取配置
+		try
+		{
+			string fileContent = File.ReadAllText(configPath);
+			return JsonConvert.DeserializeObject<Config>(fileContent) ?? new Config();
+		}
+		catch (Exception ex)
+		{
+			throw new Exception($"配置文件读取失败: {ex.Message}");
+		}
+	}
+
 	public async Task Start()
 	{
 		if (_listener?.IsListening == true) return;
-
 		_listener = new HttpListener();
-		_listener.Prefixes.Add(_config.Url);
-
+		_listener.Prefixes.Add(Config.Url);
 		try
 		{
 			_listener.Start();
 			_cts = new CancellationTokenSource();
-
-			Log($"[系统] 服务启动成功 | 监听: {_config.Url}");
-
-			if (!string.IsNullOrEmpty(_config.Token)) Log("[安全] 鉴权模式已启用");
-			if (_config.BotQq > 0) Log($"[配置] 绑定机器人 QQ: {_config.BotQq}");
-
-			// 开启不阻塞的监听循环
+			Log($"[系统] 监听启动 | {Config.Url}");
 			_ = AcceptConnectionsLoop(_cts.Token);
-
 			StartFinish?.Invoke(this);
 		}
 		catch (HttpListenerException ex)
 		{
-			Log($"[启动失败] 端口被占用或无权限: {ex.Message}");
+			Log($"[启动失败] 端口被占用: {ex.Message}");
 			throw;
 		}
 	}
 
-	/// <summary>
-	/// 停止服务并释放所有连接
-	/// </summary>
 	public void Stop()
 	{
 		_cts?.Cancel();
 		_listener?.Stop();
-
-		foreach (var socket in _activeBots.Values)
+		foreach (var pair in _activeBots)
 		{
-			// 优雅关闭 WebSocket
-			socket.Abort();
-			socket.Dispose();
+			try
+			{
+				pair.Value.Abort();
+				pair.Value.Dispose();
+			}
+			catch
+			{
+			}
 		}
 
 		_activeBots.Clear();
 		Log("[系统] 服务已停止");
 	}
 
-	/// <summary>
-	/// 循环接收新的 HTTP/WebSocket 请求
-	/// </summary>
 	private async Task AcceptConnectionsLoop(CancellationToken ct)
 	{
 		while (!ct.IsCancellationRequested && _listener != null)
 		{
 			try
 			{
-				// 异步等待新的请求
 				var context = await _listener.GetContextAsync();
-
-				if (context.Request.IsWebSocketRequest)
-				{
-					// 使用 _ 丢弃 Task，实现非阻塞处理多客户端
-					_ = HandleWebsocketHandshake(context, ct);
-				}
+				if (context.Request.IsWebSocketRequest) _ = HandleWebsocketHandshake(context, ct);
 				else
 				{
 					context.Response.StatusCode = 400;
@@ -138,58 +168,52 @@ public class BotConnect
 			}
 			catch (Exception ex) when (ex is not OperationCanceledException)
 			{
-				if (_listener?.IsListening == true)
-					Log($"[监听异常] {ex.Message}");
+				if (_listener?.IsListening == true) Log($"[监听异常] {ex.Message}");
 			}
 		}
 	}
 
-	/// <summary>
-	/// 处理 WebSocket 握手、鉴权及生命周期
-	/// </summary>
 	private async Task HandleWebsocketHandshake(HttpListenerContext context, CancellationToken ct)
 	{
-		long botId = 0;
+		string botId = "";
 		WebSocket? socket = null;
 		try
 		{
-			// 1. Token 鉴权校验
-			if (!string.IsNullOrEmpty(_config.Token))
+			if (!string.IsNullOrEmpty(Config.Token))
 			{
 				string? auth = context.Request.Headers["Authorization"];
-				if (string.IsNullOrEmpty(auth) || auth != $"Bearer {_config.Token}")
+				if (string.IsNullOrEmpty(auth))
 				{
-					Log("[拒绝连接] Token 错误或未提供");
+					string? queryToken = context.Request.QueryString["access_token"];
+					if (!string.IsNullOrEmpty(queryToken)) auth = "Bearer " + queryToken;
+				}
+
+				if (string.IsNullOrEmpty(auth) || auth != $"Bearer {Config.Token}")
+				{
+					Log("[拒绝] Token 校验失败");
 					context.Response.StatusCode = 401;
 					context.Response.Close();
 					return;
 				}
 			}
 
-			// 2. 解析机器人 QQ 号 (从消息头获取)
-			long.TryParse(context.Request.Headers["X-Self-ID"], out botId);
+			if (context.Request.Headers["X-Self-ID"] is string id && !string.IsNullOrEmpty(id)) botId = id;
+			else botId = "Unknown_" + Guid.NewGuid().ToString("N")[..6];
 
-			// 3. 校验 QQ 号是否匹配配置
-			if (_config.BotQq.HasValue && _config.BotQq != 0 && botId != _config.BotQq)
+			if (!string.IsNullOrEmpty(Config.BotQq) && botId != Config.BotQq)
 			{
-				Log($"[拒绝连接] ID不匹配 (期望:{_config.BotQq}, 实际:{botId})");
+				Log($"[拒绝] ID不匹配 (期望:{Config.BotQq}, 实际:{botId})");
 				context.Response.StatusCode = 403;
 				context.Response.Close();
 				return;
 			}
 
-			// 4. 完成握手并记录连接
 			var wsContext = await context.AcceptWebSocketAsync(null);
 			socket = wsContext.WebSocket;
 			_activeBots[botId] = socket;
-
-			// 动态更新发送器（确保多机器人环境下 ID 正确）
 			Sender = new BotActionSender(_activeBots, Log, botId);
-
-			Log($"[连接] 机器人 {botId} 已成功接入");
+			Log($"[连接] 机器人 {botId} 已接入");
 			BotOnline?.Invoke();
-
-			// 5. 进入消息接收死循环，直到断开连接
 			await ReceiveMessageLoop(socket, botId, ct);
 		}
 		catch (Exception ex)
@@ -198,7 +222,6 @@ public class BotConnect
 		}
 		finally
 		{
-			// 连接断开时的清理工作
 			if (socket != null)
 			{
 				_activeBots.TryRemove(botId, out _);
@@ -208,23 +231,15 @@ public class BotConnect
 		}
 	}
 
-	/// <summary>
-	/// 核心接收循环：支持处理超大数据包，防止程序卡死
-	/// </summary>
-	private async Task ReceiveMessageLoop(WebSocket socket, long botId, CancellationToken ct)
+	private async Task ReceiveMessageLoop(WebSocket socket, string botId, CancellationToken ct)
 	{
-		// 128KB 缓冲区
 		var buffer = new byte[1024 * 128];
-
 		while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
 		{
-			using var ms = new MemoryStream();
-			WebSocketReceiveResult result;
-
 			try
 			{
-				// 循环读取直到收到完整的消息结束帧（EndOfMessage）
-				// 这样即使消息超过 128KB 也不会报错或卡死
+				using var ms = new MemoryStream();
+				WebSocketReceiveResult result;
 				do
 				{
 					result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
@@ -237,31 +252,21 @@ public class BotConnect
 					ms.Seek(0, SeekOrigin.Begin);
 					using var reader = new StreamReader(ms, Encoding.UTF8);
 					string json = await reader.ReadToEndAsync();
-
-					// 建议使用异步或 Task.Run 处理业务逻辑，防止阻塞接收循环
 					_ = Task.Run(() => ProcessReceivedJson(json, botId), ct);
 				}
 			}
-			catch (Exception ex)
+			catch
 			{
-				Log($"[读取消息异常] Bot:{botId} - {ex.Message}");
 				break;
 			}
 		}
 	}
 
-	/// <summary>
-	/// 解析收到的 JSON 消息并分发事件
-	/// </summary>
-	private void ProcessReceivedJson(string json, long botId)
+	private void ProcessReceivedJson(string json, string botId)
 	{
-		if (string.IsNullOrWhiteSpace(json)) return;
-
 		try
 		{
 			var jsonObj = JObject.Parse(json);
-
-			// 过滤心跳等元事件，减少不必要的计算
 			string? postType = jsonObj["post_type"]?.ToString();
 			if (postType == "meta_event" || postType == null) return;
 
@@ -275,14 +280,9 @@ public class BotConnect
 				OnOtherEventReceived?.Invoke(jsonObj, botId);
 			}
 		}
-		catch (JsonException ex)
-		{
-			// 仅记录解析失败，不抛出异常以防程序崩溃
-			Log($"[JSON解析错误] {ex.Message}");
-		}
 		catch (Exception ex)
 		{
-			Log($"[逻辑处理错误] {ex.Message}");
+			Log($"[数据处理异常] {ex.Message}");
 		}
 	}
 

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "1gRftsO1Ih0=",
+  "dgSpecHash": "74iQFMSNYbA=",
   "success": true,
-  "projectFilePath": "E:\\code\\BkyhBot\\BkyhBot\\BkyhBot\\BkyhBot.csproj",
+  "projectFilePath": "F:\\code\\BkyhBot\\BkyhBot\\BkyhBot\\BkyhBot.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Administrator\\.nuget\\packages\\blacksharp.core\\1.0.7\\blacksharp.core.1.0.7.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\diskinfotoolkit\\1.1.2\\diskinfotoolkit.1.1.2.nupkg.sha512",
