@@ -1,99 +1,79 @@
-# BkyhBot (BKYH机器人框架)
+# 📖 BkyhBot (BKYH 机器人驱动框架)
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![OneBot](https://img.shields.io/badge/OneBot-v11-green.svg)](https://11.onebot.dev/)
 
-**BkyhBot** 是一个专为 **NapCat/OneBot 11** 设计的轻量级 C# 机器人驱动框架。它采用插件化架构，支持高度自定义的消息处理和动作执行。
+**BkyhBot** 是一个专为 **NapCat/OneBot 11** 设计的轻量级 C# 机器人驱动框架。它采用先进的插件化架构，支持高度自定义的消息处理和动作执行，让你能以最优雅的代码实现最强大的功能！(๑•̀ㅂ•́)و✧
 
 ---
 
-## 🛠️ 架构特色
+## 🛠️ 核心架构特色
 
-### 1. 规范化的插件配置系统
-项目采用了**“配置继承”**的设计模式。所有的插件配置类都继承自统一的基础信息类，确保了插件管理的标准化。
+### 1. 强化的单例插件系统
+项目采用了全新的 **“泛型单例继承”** 模式。所有的插件逻辑类都继承自 `Plug<T, TA>`，确保每个插件在内存中全局唯一，避免了资源重复占用的问题。
 
-- **`PlugMessage` (基类)**：定义插件的开关、名称、功能描述等元数据。
-- **`CustomConfig` (子类)**：继承基类并扩展插件特有的业务参数（如群号、黑名单、API Key等）。
+### 2. 自动化配置生命周期
+- **自动加载/生成**：插件启动时会自动在 `Plugins/` 目录下寻找对应的 JSON 配置文件。如果文件不存在，框架会根据配置类的默认值自动生成，实现真正的“零配置”上手。
+- **智能编码**：内置了针对中文环境的优化，保存配置文件时不会出现乱码，方便欧尼酱直接手动修改 JSON。
 
-### 2. 自动化生命周期管理
-- **自动加载**：基类 `Plug<T>` 自动根据类名在 `Plug/` 目录下寻找对应的 JSON 配置文件。
-- **自动初始化**：如果配置文件不存在，框架会根据配置类的默认值自动生成，实现“零配置”上手。
-
-### 3. 灵活的消息驱动
-- **强类型事件**：将 OneBot 的原始 JSON 转换为 C# 强类型对象，支持 LINQ 操作。
-- **多媒体支持**：内置 CQ 码封装，支持图片、语音、闪照以及图文混合消息。
+### 3. 全面适配的强类型驱动
+- **ID 系统升级**：为了兼容各种平台的特殊 ID，框架内的 QQ 号、群号等字段全面采用 `string` 类型。
+- **多媒体深度集成**：内置封装了图片、语音、视频、回复、撤回等多种 OneBot 动作，支持 CQ 码自动构建。
 
 ---
 
-## 💻 代码示例：插件开发
+## 💻 插件开发示例
 
-得益于配置继承，开发一个新插件非常简单：
+得益于单例模式设计，开发一个新插件只需要简单的两步：
 
-### 第一步：定义配置 (继承模式)
+### 第一步：定义配置类
 ```csharp
-// 插件特有的配置信息
-public class MyActionConfig : PlugMessage // 继承插件基本信息类
+// 插件特有的配置信息，需要继承 PlugMessage 基类
+public class MyActionConfig : PlugMessage 
 {
-    public long[] TargetGroups { get; set; } = []; // 业务特有参数
-    public string ReplyText { get; set; } = "Hello World!";
+    // 业务特有参数，会自动序列化到 JSON
+    public List<string> TargetGroups { get; set; } = new(); 
+    public string ReplyText { get; set; } = "欧尼酱，我收到消息啦！";
 }
-
-```
-
-### 第二步：编写业务逻辑
-
-```csharp
-public class MyAction : Plug<MyActionConfig>
+第二步：编写业务逻辑
+C#
+// 继承 Plug<配置类, 插件类本身>
+public class MyAction : Plug<MyActionConfig, MyAction>
 {
-    public MyAction(string configPath, BotConnect bot)
+    // 重写 OnInit 方法编写业务逻辑
+    protected override void OnInit()
     {
-        ConfigPath = configPath;
-        Bot = bot;
-    }
-
-    public override void Start()
-    {
-        LoadConfig(ConfigPath);
-        
-        // 使用继承自基类的开关
-        if (!Message.PlugIsOpen) return;
-
+        // 监听群消息事件
         Bot.OnGroupMessageReceived += async (e) => {
+            // 使用继承自基类的开关检查
+            if (!Message.PlugIsOpen) return;
+
+            // 逻辑判断：如果群号在白名单内
             if (Message.TargetGroups.Contains(e.GroupId)) {
                 await Bot.Sender.SendGroupMessage(e.GroupId, Message.ReplyText);
             }
         };
     }
 }
+🚀 快速开始
+环境依赖：项目基于 .NET 10.0。
 
-```
+连接 NapCat：在 NapCat 中开启反向 WebSocket，连接地址指向框架监听的 URL（默认 http://127.0.0.1:3001/）。
 
----
+启动代码：
 
-## 🚀 快速开始
+C#
+// 1. 初始化并启动机器人连接
+var bot = new BotConnect(); 
+await bot.Start(); //
 
-1. **配置 NapCat**：开启反向 WebSocket，连接地址指向 `ws://你的服务器IP:端口/`。
-2. **初始化项目**：
-```csharp
-var config = new Config { Url = "http://*:3001/", BotQq = 123456789 };
-var bot = new BotConnect(config);
+// 2. 启动你的插件 (使用单例启动)
+MyAction.Start(); //
+📂 项目结构说明
+BotConnect/: 核心连接管理，负责 WebSocket 握手、Token 校验与消息分发。
 
-// 实例化并启动插件
-new MyAction("Plug/MyAction.json", bot).Start();
+BotAction/: 动作执行器，封装了发送群/私聊消息、图片、撤回等 API。
 
-await bot.Start();
+Plugins/: 插件基类与配置持久化逻辑定义。
 
-```
-
-
-
----
-
-## 📂 项目结构
-
-* `BotConnect/`: 核心连接管理，负责 WebSocket 握手与消息分发。
-* `BotAction/`: 动作执行器，封装了所有 OneBot API。
-* `Plugins/`: 插件基类与接口定义。
-* `Class/`: 实体模型与配置信息类。
-
----
+Class/: 包含 Config 全局配置、消息事件实体类及枚举定义。
