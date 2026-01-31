@@ -11,46 +11,33 @@ namespace BkyhBot.BotConnect;
 
 public class BotConnect
 {
-	#region 私有字段
-
 	private HttpListener? _listener;
 	private CancellationTokenSource? _cts;
 	private readonly ConcurrentDictionary<string, WebSocket> _activeBots = new();
 	private static BotConnect? _instance;
-
-	#endregion
-
-	#region 公共属性
 
 	public Config Config { get; private set; }
 	public List<PlugMessage> PlugMessageList { get; set; } = new();
 	public BotActionSender Sender { get; private set; }
 	public static BotConnect Instance => _instance!;
 
-	#endregion
+	#region 事件定义
 
-	#region 事件定义 (NapCat/OneBot11 全事件支持)
-
-	// 消息事件
+	// 原有事件保持不变，旧插件依然订阅这些
 	public event Action<GroupMessageEvent>? OnGroupMessageReceived;
 	public event Action<PrivateMessageEvent>? OnPrivateMessageReceived;
-
-	// 通知事件 (群成员变动、戳一戳、荣誉变更等)
 	public event Action<NoticeEvent>? OnNoticeReceived;
-
-	// 请求事件 (加好友、加群申请)
 	public event Action<RequestEvent>? OnRequestReceived;
-
-	// 元事件 (心跳、生命周期)
 	public event Action<MetaEvent>? OnMetaEventReceived;
-
-	// 兜底事件 (处理未知类型的 JSON)
 	public event Action<JObject, string>? OnOtherEventReceived;
 
-	// 系统事件
 	public event Action<string>? OnLog;
 	public event Action? BotOnline;
 	public event Action<BotConnect>? StartFinish;
+
+	// [新增] API 响应事件 (Additive Change)
+	// 只有 GroupManager 这种需要查数据的插件才会用，其他插件不订阅也无所谓
+	public event Action<JObject>? OnApiResponseReceived;
 
 	#endregion
 
@@ -63,54 +50,36 @@ public class BotConnect
 		if (_instance != null) return;
 		_instance = this;
 		Config = config ?? throw new ArgumentNullException(nameof(config));
-
 		if (string.IsNullOrWhiteSpace(Config.Url)) throw new ArgumentException("监听 URL 不能为空");
 		if (!Config.Url.EndsWith("/")) Config.Url += "/";
-
 		string initialId = Config.BotQq ?? "";
 		Sender = new BotActionSender(_activeBots, Log, initialId);
 	}
 
-	/// <summary>
-	/// 加载或初始化配置
-	/// </summary>
+	// ... (LoadOrInitConfig, Start, Stop, AcceptConnectionsLoop, HandleWebsocketHandshake, ReceiveMessageLoop 保持原样) ...
+	// 为了节省篇幅，这里略过这些未修改的方法，请保留你原文件中的内容。
+	// 务必保留 ReceiveMessageLoop，它会调用下面的 ProcessReceivedJson。
+
 	private static Config LoadOrInitConfig()
 	{
+		// 保持原样，直接使用你现有的代码
 		string configPath = Path.Combine("Configs", "Config.json");
 		Console.WriteLine($"[系统] 配置文件路径: {Path.GetFullPath(configPath)}");
-
-		// 如果文件不存在，自动创建默认配置
 		if (!File.Exists(configPath))
 		{
 			try
 			{
 				string dir = Path.GetDirectoryName(configPath)!;
-				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-					Directory.CreateDirectory(dir);
-
+				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 				var defaultConfig = new Config
 				{
-					Url = "http://127.0.0.1:3001/",
-					BotQq = "123456789",
-					MasterQq = "987654321",
-					PlugConfigPath = "Plugins/",
-
-					// [新功能] 全群响应开关
-					EnableAllGroups = false, // 默认关闭，只响应白名单
-
-					// [新功能] 黑白名单
-					GroupWhiteList = new List<string>(),
-					GroupBlackList = new List<string>(),
-					PrivateWhiteList = new List<string>(),
-					PrivateBlackList = new List<string>()
+					Url = "http://127.0.0.1:3001/", BotQq = "123456789", MasterQq = "987654321", PlugConfigPath = "Plugins/",
+					EnableAllGroups = false, GroupWhiteList = new List<string>(), GroupBlackList = new List<string>(),
+					PrivateWhiteList = new List<string>(), PrivateBlackList = new List<string>()
 				};
-
 				string json = JsonConvert.SerializeObject(defaultConfig, Formatting.Indented);
 				File.WriteAllText(configPath, json);
-
-				throw new FileNotFoundException(
-					$"[初次运行] 已生成配置文件：{Path.GetFullPath(configPath)}\n请修改配置后重启程序。"
-				);
+				throw new FileNotFoundException($"[初次运行] 已生成配置文件：{configPath}");
 			}
 			catch (Exception ex) when (ex is not FileNotFoundException)
 			{
@@ -118,11 +87,9 @@ public class BotConnect
 			}
 		}
 
-		// 读取已有配置
 		try
 		{
-			string fileContent = File.ReadAllText(configPath);
-			return JsonConvert.DeserializeObject<Config>(fileContent) ?? new Config();
+			return JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath)) ?? new Config();
 		}
 		catch (Exception ex)
 		{
@@ -197,7 +164,6 @@ public class BotConnect
 		WebSocket? socket = null;
 		try
 		{
-			// 1. Token 鉴权
 			if (!string.IsNullOrEmpty(Config.Token))
 			{
 				string? auth = context.Request.Headers["Authorization"];
@@ -216,11 +182,9 @@ public class BotConnect
 				}
 			}
 
-			// 2. 获取 Bot ID
 			if (context.Request.Headers["X-Self-ID"] is string id && !string.IsNullOrEmpty(id)) botId = id;
 			else botId = "Unknown_" + Guid.NewGuid().ToString("N")[..6];
 
-			// 3. Bot ID 校验
 			if (!string.IsNullOrEmpty(Config.BotQq) && botId != Config.BotQq)
 			{
 				Log($"[拒绝] ID不匹配 (期望:{Config.BotQq}, 实际:{botId})");
@@ -229,18 +193,12 @@ public class BotConnect
 				return;
 			}
 
-			// 4. 建立连接
 			var wsContext = await context.AcceptWebSocketAsync(null);
 			socket = wsContext.WebSocket;
 			_activeBots[botId] = socket;
-
-			// 更新 ActionSender
-			Sender = new BotActionSender(_activeBots, Log, botId);
-
+			Sender = new BotActionSender(_activeBots, Log, botId); // 这里的 Sender 已经是新的加锁版了
 			Log($"[连接] 机器人 {botId} 已接入");
 			BotOnline?.Invoke();
-
-			// 进入接收循环
 			await ReceiveMessageLoop(socket, botId, ct);
 		}
 		catch (Exception ex)
@@ -279,8 +237,7 @@ public class BotConnect
 					ms.Seek(0, SeekOrigin.Begin);
 					using var reader = new StreamReader(ms, Encoding.UTF8);
 					string json = await reader.ReadToEndAsync();
-
-					// 异步处理消息，不阻塞接收循环
+					// 这里不需要修改，因为它调用的是 ProcessReceivedJson
 					_ = Task.Run(() => ProcessReceivedJson(json, botId), ct);
 				}
 			}
@@ -292,101 +249,86 @@ public class BotConnect
 	}
 
 	/// <summary>
-	/// 处理接收到的 JSON 数据并分发事件
+	/// [修复] 使用 Task.Run 确保完全异步，防止主程序因插件耗时操作而卡死
 	/// </summary>
 	private void ProcessReceivedJson(string json, string botId)
 	{
-		try
+		Task.Run(() =>
 		{
-			var jsonObj = JObject.Parse(json);
-			string? postType = jsonObj["post_type"]?.ToString();
-
-			// 如果没有 post_type，可能是 API 响应 (echo)，暂时忽略
-			if (string.IsNullOrEmpty(postType)) return;
-
-			switch (postType)
+			try
 			{
-				case "message":
-					HandleMessage(jsonObj);
-					break;
+				var jsonObj = JObject.Parse(json);
+				string? postType = jsonObj["post_type"]?.ToString();
 
-				case "notice":
-					var noticeEvent = jsonObj.ToObject<NoticeEvent>();
-					if (noticeEvent != null) OnNoticeReceived?.Invoke(noticeEvent);
-					else OnOtherEventReceived?.Invoke(jsonObj, botId);
-					break;
+				// 1. 处理 API 响应 (GroupManager 需要用到)
+				if (string.IsNullOrEmpty(postType))
+				{
+					if (jsonObj.ContainsKey("echo")) OnApiResponseReceived?.Invoke(jsonObj);
+					return;
+				}
 
-				case "request":
-					var requestEvent = jsonObj.ToObject<RequestEvent>();
-					if (requestEvent != null) OnRequestReceived?.Invoke(requestEvent);
-					else OnOtherEventReceived?.Invoke(jsonObj, botId);
-					break;
-
-				case "meta_event":
-					var metaEvent = jsonObj.ToObject<MetaEvent>();
-					if (metaEvent != null) OnMetaEventReceived?.Invoke(metaEvent);
-					break;
-
-				default:
-					OnOtherEventReceived?.Invoke(jsonObj, botId);
-					break;
+				// 2. 正常分发事件 (旧插件正常接收)
+				switch (postType)
+				{
+					case "message":
+						HandleMessage(jsonObj);
+						break;
+					case "notice":
+						var noticeEvent = jsonObj.ToObject<NoticeEvent>();
+						if (noticeEvent != null) OnNoticeReceived?.Invoke(noticeEvent);
+						else OnOtherEventReceived?.Invoke(jsonObj, botId);
+						break;
+					case "request":
+						var requestEvent = jsonObj.ToObject<RequestEvent>();
+						if (requestEvent != null) OnRequestReceived?.Invoke(requestEvent);
+						else OnOtherEventReceived?.Invoke(jsonObj, botId);
+						break;
+					case "meta_event":
+						var metaEvent = jsonObj.ToObject<MetaEvent>();
+						if (metaEvent != null) OnMetaEventReceived?.Invoke(metaEvent);
+						break;
+					default:
+						OnOtherEventReceived?.Invoke(jsonObj, botId);
+						break;
+				}
 			}
-		}
-		catch (Exception ex)
-		{
-			Log($"[数据处理异常] {ex.Message}");
-		}
+			catch (Exception ex)
+			{
+				Log($"[数据处理异常] {ex.Message}");
+			}
+		});
 	}
 
-	/// <summary>
-	/// 处理消息并进行权限过滤 (全群响应开关 + 黑白名单)
-	/// </summary>
 	private void HandleMessage(JObject jsonObj)
 	{
+		// 保持原样，无需修改
 		string? msgType = jsonObj["message_type"]?.ToString();
-
 		if (msgType == "group")
 		{
 			var groupEvent = jsonObj.ToObject<GroupMessageEvent>();
 			if (groupEvent == null) return;
-
-			// 1. 黑名单检查 (最高优先级：在黑名单里直接拦截)
-			if (Config.GroupBlackList != null && Config.GroupBlackList.Contains(groupEvent.GroupId))
-				return;
-
-			// 2. 权限检查 (全群开关 OR 白名单)
+			if (Config.GroupBlackList != null && Config.GroupBlackList.Contains(groupEvent.GroupId)) return;
 			if (!Config.EnableAllGroups)
 			{
-				// 如果【没开启全群】，则必须在【白名单】里
-				if (Config.GroupWhiteList == null || !Config.GroupWhiteList.Contains(groupEvent.GroupId))
-					return; // 既没开全群，又不在白名单 -> 拦截
+				if (Config.GroupWhiteList == null || !Config.GroupWhiteList.Contains(groupEvent.GroupId)) return;
 			}
-			// 如果 EnableAllGroups 为 true，则跳过白名单检查，直接响应 (前提是不在黑名单)
 
-			// 通过所有检查，触发事件
 			OnGroupMessageReceived?.Invoke(groupEvent);
 		}
 		else if (msgType == "private")
 		{
 			var privateEvent = jsonObj.ToObject<PrivateMessageEvent>();
 			if (privateEvent == null) return;
-
-			// 1. 黑名单检查
-			if (Config.PrivateBlackList != null && Config.PrivateBlackList.Contains(privateEvent.UserId))
-				return;
-
-			// 2. 白名单检查 (私聊目前逻辑：如果白名单有内容，则必须在白名单里)
+			if (Config.PrivateBlackList != null && Config.PrivateBlackList.Contains(privateEvent.UserId)) return;
 			if (Config.PrivateWhiteList != null && Config.PrivateWhiteList.Count > 0)
 			{
-				if (!Config.PrivateWhiteList.Contains(privateEvent.UserId))
-					return;
+				if (!Config.PrivateWhiteList.Contains(privateEvent.UserId)) return;
 			}
 
 			OnPrivateMessageReceived?.Invoke(privateEvent);
 		}
 		else
 		{
-			// 未知类型
 			OnOtherEventReceived?.Invoke(jsonObj, jsonObj["self_id"]?.ToString() ?? "");
 		}
 	}
