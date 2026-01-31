@@ -1,268 +1,179 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace BkyhBot.Class
 {
-    /// <summary>
-    /// 消息段类型枚举 - 用于定义各种消息内容格式
-    /// </summary>
-    public enum MsgType
-    {
-        /// <summary> 纯文本 </summary>
-        Text,
+	// ... (MsgType 枚举保持不变) ...
+	public enum MsgType
+	{
+		Text,
+		Face,
+		Image,
+		Record,
+		Video,
+		At,
+		Rps,
+		Dice,
+		Shake,
+		Poke,
+		Share,
+		Contact,
+		Location,
+		Music,
+		Reply,
+		Forward,
+		Node,
+		Json,
+		MFace,
+		File,
+		Markdown,
+		LightApp
+	}
 
-        /// <summary> FaceQQ 表情 </summary>
-        Face,
+	public abstract class PlugMessage
+	{
+		public bool PlugIsOpen { get; set; } = true;
+		public string PlugName { get; set; } = "插件名称";
+		public string Description { get; set; } = "插件描述";
+	}
 
-        /// <summary> 图片 (支持通过子类型区分 mface/image) </summary>
-        Image,
+	/// <summary>
+	/// 机器人配置类 (已添加黑白名单)
+	/// </summary>
+	public class Config
+	{
+		public string? BotQq { get; set; }
+		public string? Url { get; set; }
+		public string? Token { get; set; }
+		public string MasterQq { get; set; }
+		public string Name { get; set; } = "夜语真白";
+		public string PlugConfigPath { get; set; } = "";
 
-        /// <summary> 语音 </summary>
-        Record,
+		// ================== 新增：黑白名单控制 ==================
 
-        /// <summary> 视频 </summary>
-        Video,
+		/// <summary>
+		/// 是否开启全群响应
+		/// <para>true: 响应所有群 (除非在黑名单)</para>
+		/// <para>false: 只响应白名单内的群</para>
+		/// </summary>
+		public bool EnableAllGroups { get; set; } = false;
 
-        /// <summary> @某人 </summary>
-        At,
+		/// <summary>
+		/// 群聊白名单 (如果有值，则只响应这些群；为空则响应所有)
+		/// </summary>
+		public List<string> GroupWhiteList { get; set; } = new();
 
-        /// <summary> 猜拳魔法表情 </summary>
-        Rps,
+		/// <summary>
+		/// 群聊黑名单 (在此名单内的群，绝对不响应，优先级高于白名单)
+		/// </summary>
+		public List<string> GroupBlackList { get; set; } = new();
 
-        /// <summary> 骰子 </summary>
-        Dice,
+		/// <summary>
+		/// 私聊白名单 (如果有值，则只响应这些好友)
+		/// </summary>
+		public List<string> PrivateWhiteList { get; set; } = new();
 
-        /// <summary> 私聊窗口抖动 (注意：部分场景可能受限) </summary>
-        Shake,
+		/// <summary>
+		/// 私聊黑名单 (在此名单内的人，绝对不响应)
+		/// </summary>
+		public List<string> PrivateBlackList { get; set; } = new();
+	}
 
-        /// <summary> 群聊戳一戳 </summary>
-        Poke,
+	// ... (BaseEvent, MessageEvent 等其他类保持不变，为了节省篇幅就不重复粘贴啦，只替换 Config 类即可) ...
+	// 下面为了完整性，把关键的 Event 类也列出来，你可以直接复制替换整个文件
 
-        /// <summary> 链接分享 (JSON格式) - [当前状态：❌ 不通过消息发送] </summary>
-        Share,
+	public class BaseEvent
+	{
+		[JsonProperty("self_id")] public string SelfId { get; set; }
+		[JsonProperty("time")] public string Time { get; set; }
+		[JsonProperty("post_type")] public string PostType { get; set; }
+	}
 
-        /// <summary> 推荐好友/群 (JSON格式) </summary>
-        Contact,
+	public class MessageEvent : BaseEvent
+	{
+		[JsonProperty("message_type")] public string MessageType { get; set; }
+		[JsonProperty("sub_type")] public string SubType { get; set; }
+		[JsonProperty("message_id")] public int MessageId { get; set; }
+		[JsonProperty("user_id")] public string UserId { get; set; }
+		[JsonProperty("message")] public List<MessageNode> Message { get; set; }
+		[JsonProperty("raw_message")] public string RawMessage { get; set; }
+		[JsonProperty("font")] public int Font { get; set; }
+		[JsonProperty("sender")] public SenderInfo Sender { get; set; }
+		[JsonProperty("message_seq")] public int MessageSeq { get; set; }
+		[JsonProperty("real_id")] public int RealId { get; set; }
+		[JsonProperty("real_seq")] public string RealSeq { get; set; }
+		[JsonProperty("message_format")] public string MessageFormat { get; set; }
+	}
 
-        /// <summary> 位置分享 (JSON格式) - [当前状态：❌ 不通过消息发送] </summary>
-        Location,
+	public class GroupMessageEvent : MessageEvent
+	{
+		[JsonProperty("group_id")] public string GroupId { get; set; }
+		[JsonProperty("group_name")] public string GroupName { get; set; }
+		[JsonProperty("anonymous")] public AnonymousInfo Anonymous { get; set; }
+	}
 
-        /// <summary> 音乐分享 (JSON格式) </summary>
-        Music,
+	public class PrivateMessageEvent : MessageEvent
+	{
+		[JsonProperty("target_id")] public string TargetId { get; set; }
+		[JsonProperty("temp_source")] public int TempSource { get; set; }
+	}
 
-        /// <summary> 回复消息 </summary>
-        Reply,
+	public class NoticeEvent : BaseEvent
+	{
+		[JsonProperty("notice_type")] public string NoticeType { get; set; }
+		[JsonProperty("group_id")] public string GroupId { get; set; }
+		[JsonProperty("user_id")] public string UserId { get; set; }
+		[JsonProperty("sub_type")] public string SubType { get; set; }
+		[JsonProperty("operator_id")] public string OperatorId { get; set; }
+		[JsonProperty("target_id")] public string TargetId { get; set; }
+		[JsonProperty("duration")] public long Duration { get; set; }
+		[JsonProperty("file")] public FileInfo File { get; set; }
+		[JsonProperty("honor_type")] public string HonorType { get; set; }
+	}
 
-        /// <summary> 转发消息 </summary>
-        Forward,
+	public class RequestEvent : BaseEvent
+	{
+		[JsonProperty("request_type")] public string RequestType { get; set; }
+		[JsonProperty("user_id")] public string UserId { get; set; }
+		[JsonProperty("group_id")] public string GroupId { get; set; }
+		[JsonProperty("comment")] public string Comment { get; set; }
+		[JsonProperty("flag")] public string Flag { get; set; }
+		[JsonProperty("sub_type")] public string SubType { get; set; }
+	}
 
-        /// <summary> 转发消息节点 </summary>
-        Node,
+	public class MetaEvent : BaseEvent
+	{
+		[JsonProperty("meta_event_type")] public string MetaEventType { get; set; }
+		[JsonProperty("status")] public JObject Status { get; set; }
+		[JsonProperty("interval")] public long Interval { get; set; }
+	}
 
-        /// <summary> JSON 原生信息 </summary>
-        Json,
+	public class SenderInfo
+	{
+		[JsonProperty("user_id")] public string UserId { get; set; }
+		[JsonProperty("nickname")] public string Nickname { get; set; }
+		[JsonProperty("card")] public string Card { get; set; }
+		[JsonProperty("role")] public string Role { get; set; }
+	}
 
-        /// <summary> 表情包 (通常以上报为准) </summary>
-        MFace,
+	public class MessageNode
+	{
+		[JsonProperty("type")] public string Type { get; set; }
+		[JsonProperty("data")] public Dictionary<string, string> Data { get; set; }
+	}
 
-        /// <summary> 文件发送 </summary>
-        File,
+	public class AnonymousInfo
+	{
+		[JsonProperty("id")] public long Id { get; set; }
+		[JsonProperty("name")] public string Name { get; set; }
+		[JsonProperty("flag")] public string Flag { get; set; }
+	}
 
-        /// <summary> Markdown (注意：需在双层合并转发内使用) </summary>
-        Markdown,
-
-        /// <summary> 小程序卡片 (需调用扩展接口 get_mini_app_ark) </summary>
-        LightApp
-    }
-
-
-    public abstract class PlugMessage
-    {
-        public bool PlugIsOpen { get; set; } = true; // 默认开启
-        public string PlugName { get; set; } = "插件名称";
-        public string Description { get; set; } = "插件描述";
-    }
-
-    /// <summary>
-    /// 机器人配置类
-    /// </summary>
-    public class Config
-    {
-        /// <summary>
-        /// 指定机器人的 QQ 号。
-        /// 如果赋值，则只允许该 QQ 连接；如果不赋值（null），则允许任意 QQ 连接。
-        /// </summary>
-        // [修改] long? -> string?
-        public string? BotQq { get; set; }
-
-        /// <summary>
-        /// 监听地址 (HttpListener 格式)。
-        /// 示例: "http://127.0.0.1:3001/" 或 "http://*:3001/"
-        /// </summary>
-        public string? Url { get; set; }
-
-        /// <summary>
-        /// 鉴权 Token。
-        /// 如果赋值，NapCat 必须在配置中填写相同的 Token 才能连接。
-        /// </summary>
-        public string? Token { get; set; }
-       
-
-        // [修改] long -> string
-        public string MasterQq { get; set; }
-
-        public string Name { get; set; } = "夜语真白";
-
-        //插件文件夹路径
-        public string PlugConfigPath { get; set; } = "";
-    }
-
-    /// <summary>
-    /// 群消息事件实体类
-    /// </summary>
-    public class GroupMessageEvent
-    {
-        /// <summary>
-        /// 收到消息的机器人 QQ 号
-        /// </summary>
-        [JsonProperty("self_id")]
-        // [修改] long -> string
-        public string SelfId { get; set; }
-
-        /// <summary>
-        /// 发送者的 QQ 号
-        /// </summary>
-        [JsonProperty("user_id")]
-        // [修改] long -> string
-        public string UserId { get; set; }
-
-        /// <summary>
-        /// 消息发送时间 (Unix 时间戳)
-        /// </summary>
-        [JsonProperty("time")]
-        // [修改] long -> string (注意：虽然是时间戳，但也改为 string 了哦)
-        public string Time { get; set; }
-
-        /// <summary>
-        /// 消息 ID (用于撤回等操作)
-        /// </summary>
-        [JsonProperty("message_id")]
-        public int MessageId { get; set; }
-
-        /// <summary>
-        /// 消息序号
-        /// </summary>
-        [JsonProperty("message_seq")]
-        public int MessageSeq { get; set; }
-
-        /// <summary>
-        /// 真实 ID
-        /// </summary>
-        [JsonProperty("real_id")]
-        public int RealId { get; set; }
-
-        /// <summary>
-        /// 真实序号 (注意：JSON里这个字段是字符串类型)
-        /// </summary>
-        [JsonProperty("real_seq")]
-        public string RealSeq { get; set; }
-
-        /// <summary>
-        /// 消息类型: group (群聊) 或 private (私聊)
-        /// </summary>
-        [JsonProperty("message_type")]
-        public string MessageType { get; set; }
-
-        /// <summary>
-        /// 发送者详细信息
-        /// </summary>
-        [JsonProperty("sender")]
-        public SenderInfo Sender { get; set; }
-
-        /// <summary>
-        /// 原始消息内容 (CQ码格式 string)
-        /// </summary>
-        [JsonProperty("raw_message")]
-        public string RawMessage { get; set; }
-
-        /// <summary>
-        /// 字体 ID
-        /// </summary>
-        [JsonProperty("font")]
-        public int Font { get; set; }
-
-        /// <summary>
-        /// 子类型 (normal, anonymous, notice 等)
-        /// </summary>
-        [JsonProperty("sub_type")]
-        public string SubType { get; set; }
-
-        /// <summary>
-        /// 消息链 (数组格式的消息内容)
-        /// </summary>
-        [JsonProperty("message")]
-        public List<MessageNode> Message { get; set; }
-
-        /// <summary>
-        /// 消息格式: array 或 string
-        /// </summary>
-        [JsonProperty("message_format")]
-        public string MessageFormat { get; set; }
-
-        /// <summary>
-        /// 上报类型: message, request, notice, meta_event
-        /// </summary>
-        [JsonProperty("post_type")]
-        public string PostType { get; set; }
-
-        /// <summary>
-        /// 群号
-        /// </summary>
-        [JsonProperty("group_id")]
-        // [修改] long -> string
-        public string GroupId { get; set; }
-
-        /// <summary>
-        /// 群名称
-        /// </summary>
-        [JsonProperty("group_name")]
-        public string GroupName { get; set; }
-    }
-
-    /// <summary>
-    /// 发送者信息
-    /// </summary>
-    public class SenderInfo
-    {
-        [JsonProperty("user_id")] 
-        // [修改] long -> string
-        public string UserId { get; set; }
-
-        [JsonProperty("nickname")] 
-        public string Nickname { get; set; }
-
-        [JsonProperty("card")] 
-        public string Card { get; set; } // 群名片/备注
-
-        [JsonProperty("role")] 
-        public string Role { get; set; } // owner(群主), admin(管理员), member(成员)
-    }
-
-    /// <summary>
-    /// 消息链节点 (对应 array 格式的每一个元素)
-    /// </summary>
-    public class MessageNode
-    {
-        /// <summary>
-        /// 消息类型: text, at, face, image 等
-        /// </summary>
-        [JsonProperty("type")]
-        public string Type { get; set; }
-
-        /// <summary>
-        /// 数据内容 (根据类型不同，字段也不同，所以用 Dictionary 比较通用)
-        /// 例如: {"text": "你好"} 或 {"qq": "123456"}
-        /// </summary>
-        [JsonProperty("data")]
-        public Dictionary<string, string> Data { get; set; }
-    }
+	public class FileInfo
+	{
+		[JsonProperty("id")] public string Id { get; set; }
+		[JsonProperty("name")] public string Name { get; set; }
+		[JsonProperty("size")] public long Size { get; set; }
+		[JsonProperty("busid")] public long BusId { get; set; }
+	}
 }
