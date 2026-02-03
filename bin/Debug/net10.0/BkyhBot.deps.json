@@ -485,33 +485,10 @@
       },
       "System.Configuration.ConfigurationManager/10.0.1": {
         "dependencies": {
-          "System.Diagnostics.EventLog": "10.0.1",
           "System.Security.Cryptography.ProtectedData": "10.0.1"
         },
         "runtime": {
           "lib/net10.0/System.Configuration.ConfigurationManager.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.125.57005"
-          }
-        }
-      },
-      "System.Diagnostics.EventLog/10.0.1": {
-        "runtime": {
-          "lib/net10.0/System.Diagnostics.EventLog.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.125.57005"
-          }
-        },
-        "runtimeTargets": {
-          "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.Messages.dll": {
-            "rid": "win",
-            "assetType": "runtime",
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/win/lib/net10.0/System.Diagnostics.EventLog.dll": {
-            "rid": "win",
-            "assetType": "runtime",
             "assemblyVersion": "10.0.0.0",
             "fileVersion": "10.0.125.57005"
           }
@@ -805,13 +782,6 @@
       "sha512": "sha512-HfOAIlSA8OuaxBZD6xjsUWhtB0KdKSWEfRId8gSGveLUjuP6G8IxfiFgJNxaiRIEC1kx4pSvz3Em5xW/J6LLxA==",
       "path": "system.configuration.configurationmanager/10.0.1",
       "hashPath": "system.configuration.configurationmanager.10.0.1.nupkg.sha512"
-    },
-    "System.Diagnostics.EventLog/10.0.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-xfaHEHVDkMOOZR5S6ZGezD0+vekdH1Nx/9Ih8/rOqOGSOk1fxiN3u94bYkBW/wigj0Uw2Wt3vvRj9mtYdgwEjw==",
-      "path": "system.diagnostics.eventlog/10.0.1",
-      "hashPath": "system.diagnostics.eventlog.10.0.1.nupkg.sha512"
     },
     "System.Diagnostics.PerformanceCounter/10.0.1": {
       "type": "package",

@@ -38,7 +38,7 @@ namespace BkyhBot.Class
 	}
 
 	/// <summary>
-	/// 机器人配置类 (已添加黑白名单)
+	/// 机器人配置类
 	/// </summary>
 	public class Config
 	{
@@ -49,36 +49,30 @@ namespace BkyhBot.Class
 		public string Name { get; set; } = "夜语真白";
 		public string PlugConfigPath { get; set; } = "";
 
-		// ================== 新增：黑白名单控制 ==================
+		// ================== [新增] 网页控制端配置 ==================
+
+		/// <summary>
+		/// 网页后台监听地址 (建议使用 http://*:5000 允许局域网访问)
+		/// </summary>
+		public string WebDashboardUrl { get; set; } = "http://*:5000";
+
+		/// <summary>
+		/// 网页后台管理密钥 (登录网页时需要输入)
+		/// </summary>
+		public string WebAdminSecret { get; set; } = "123456";
+
+		// =========================================================
 
 		/// <summary>
 		/// 是否开启全群响应
-		/// <para>true: 响应所有群 (除非在黑名单)</para>
-		/// <para>false: 只响应白名单内的群</para>
 		/// </summary>
 		public bool EnableAllGroups { get; set; } = false;
 
-		/// <summary>
-		/// 群聊白名单 (如果有值，则只响应这些群；为空则响应所有)
-		/// </summary>
 		public List<string> GroupWhiteList { get; set; } = new();
-
-		/// <summary>
-		/// 群聊黑名单 (在此名单内的群，绝对不响应，优先级高于白名单)
-		/// </summary>
 		public List<string> GroupBlackList { get; set; } = new();
-
-		/// <summary>
-		/// 私聊白名单 (如果有值，则只响应这些好友)
-		/// </summary>
 		public List<string> PrivateWhiteList { get; set; } = new();
-
-		/// <summary>
-		/// 私聊黑名单 (在此名单内的人，绝对不响应)
-		/// </summary>
 		public List<string> PrivateBlackList { get; set; } = new();
 	}
-
 	// ... (BaseEvent, MessageEvent 等其他类保持不变，为了节省篇幅就不重复粘贴啦，只替换 Config 类即可) ...
 	// 下面为了完整性，把关键的 Event 类也列出来，你可以直接复制替换整个文件
 

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "74iQFMSNYbA=",
+  "dgSpecHash": "9RqFI1/C1cA=",
   "success": true,
   "projectFilePath": "F:\\code\\BkyhBot\\BkyhBot\\BkyhBot\\BkyhBot.csproj",
   "expectedPackageFiles": [
@@ -34,7 +34,6 @@
     "C:\\Users\\Administrator\\.nuget\\packages\\skiasharp.nativeassets.win32\\3.119.2-preview.1\\skiasharp.nativeassets.win32.3.119.2-preview.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.codedom\\10.0.1\\system.codedom.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.configuration.configurationmanager\\10.0.1\\system.configuration.configurationmanager.10.0.1.nupkg.sha512",
-    "C:\\Users\\Administrator\\.nuget\\packages\\system.diagnostics.eventlog\\10.0.1\\system.diagnostics.eventlog.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.diagnostics.performancecounter\\10.0.1\\system.diagnostics.performancecounter.10.0.1.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.io.filesystem.accesscontrol\\5.0.0\\system.io.filesystem.accesscontrol.5.0.0.nupkg.sha512",
     "C:\\Users\\Administrator\\.nuget\\packages\\system.io.ports\\10.0.1\\system.io.ports.10.0.1.nupkg.sha512",

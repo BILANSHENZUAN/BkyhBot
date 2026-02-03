@@ -6,6 +6,7 @@ using BkyhBot.BotAction;
 using BkyhBot.Class;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using BkyhBot.Web; // [新增] 引入 Web 命名空间，确保能调用 WebDashboard
 
 namespace BkyhBot.BotConnect;
 
@@ -23,7 +24,6 @@ public class BotConnect
 
 	#region 事件定义
 
-	// 原有事件保持不变，旧插件依然订阅这些
 	public event Action<GroupMessageEvent>? OnGroupMessageReceived;
 	public event Action<PrivateMessageEvent>? OnPrivateMessageReceived;
 	public event Action<NoticeEvent>? OnNoticeReceived;
@@ -34,9 +34,6 @@ public class BotConnect
 	public event Action<string>? OnLog;
 	public event Action? BotOnline;
 	public event Action<BotConnect>? StartFinish;
-
-	// [新增] API 响应事件 (Additive Change)
-	// 只有 GroupManager 这种需要查数据的插件才会用，其他插件不订阅也无所谓
 	public event Action<JObject>? OnApiResponseReceived;
 
 	#endregion
@@ -54,15 +51,23 @@ public class BotConnect
 		if (!Config.Url.EndsWith("/")) Config.Url += "/";
 		string initialId = Config.BotQq ?? "";
 		Sender = new BotActionSender(_activeBots, Log, initialId);
-	}
 
-	// ... (LoadOrInitConfig, Start, Stop, AcceptConnectionsLoop, HandleWebsocketHandshake, ReceiveMessageLoop 保持原样) ...
-	// 为了节省篇幅，这里略过这些未修改的方法，请保留你原文件中的内容。
-	// 务必保留 ReceiveMessageLoop，它会调用下面的 ProcessReceivedJson。
+		// ================== [新增] 启动网页控制台 ==================
+		// 使用 _ = 丢弃 Task，让它在后台异步运行，不阻塞主线程
+		try
+		{
+			_ = WebDashboard.StartAsync(Config);
+			Log($"[Web] 网页后台正在启动... 地址: {Config.WebDashboardUrl}");
+		}
+		catch (Exception ex)
+		{
+			Log($"[Web] 网页后台启动失败: {ex.Message}");
+		}
+		// =========================================================
+	}
 
 	private static Config LoadOrInitConfig()
 	{
-		// 保持原样，直接使用你现有的代码
 		string configPath = Path.Combine("Configs", "Config.json");
 		Console.WriteLine($"[系统] 配置文件路径: {Path.GetFullPath(configPath)}");
 		if (!File.Exists(configPath))
@@ -75,7 +80,10 @@ public class BotConnect
 				{
 					Url = "http://127.0.0.1:3001/", BotQq = "123456789", MasterQq = "987654321", PlugConfigPath = "Plugins/",
 					EnableAllGroups = false, GroupWhiteList = new List<string>(), GroupBlackList = new List<string>(),
-					PrivateWhiteList = new List<string>(), PrivateBlackList = new List<string>()
+					PrivateWhiteList = new List<string>(), PrivateBlackList = new List<string>(),
+					// 初始化默认的 Web 配置
+					WebDashboardUrl = "http://*:5000",
+					WebAdminSecret = "123456"
 				};
 				string json = JsonConvert.SerializeObject(defaultConfig, Formatting.Indented);
 				File.WriteAllText(configPath, json);
@@ -196,7 +204,7 @@ public class BotConnect
 			var wsContext = await context.AcceptWebSocketAsync(null);
 			socket = wsContext.WebSocket;
 			_activeBots[botId] = socket;
-			Sender = new BotActionSender(_activeBots, Log, botId); // 这里的 Sender 已经是新的加锁版了
+			Sender = new BotActionSender(_activeBots, Log, botId);
 			Log($"[连接] 机器人 {botId} 已接入");
 			BotOnline?.Invoke();
 			await ReceiveMessageLoop(socket, botId, ct);
@@ -237,7 +245,6 @@ public class BotConnect
 					ms.Seek(0, SeekOrigin.Begin);
 					using var reader = new StreamReader(ms, Encoding.UTF8);
 					string json = await reader.ReadToEndAsync();
-					// 这里不需要修改，因为它调用的是 ProcessReceivedJson
 					_ = Task.Run(() => ProcessReceivedJson(json, botId), ct);
 				}
 			}
@@ -248,9 +255,6 @@ public class BotConnect
 		}
 	}
 
-	/// <summary>
-	/// [修复] 使用 Task.Run 确保完全异步，防止主程序因插件耗时操作而卡死
-	/// </summary>
 	private void ProcessReceivedJson(string json, string botId)
 	{
 		Task.Run(() =>
@@ -260,14 +264,12 @@ public class BotConnect
 				var jsonObj = JObject.Parse(json);
 				string? postType = jsonObj["post_type"]?.ToString();
 
-				// 1. 处理 API 响应 (GroupManager 需要用到)
 				if (string.IsNullOrEmpty(postType))
 				{
 					if (jsonObj.ContainsKey("echo")) OnApiResponseReceived?.Invoke(jsonObj);
 					return;
 				}
 
-				// 2. 正常分发事件 (旧插件正常接收)
 				switch (postType)
 				{
 					case "message":
@@ -301,7 +303,6 @@ public class BotConnect
 
 	private void HandleMessage(JObject jsonObj)
 	{
-		// 保持原样，无需修改
 		string? msgType = jsonObj["message_type"]?.ToString();
 		if (msgType == "group")
 		{
@@ -333,5 +334,16 @@ public class BotConnect
 		}
 	}
 
-	private void Log(string msg) => OnLog?.Invoke(msg);
+	/// <summary>
+	/// 统一日志方法
+	/// </summary>
+	private void Log(string msg)
+	{
+		// 1. 触发原有的控制台/界面日志事件
+		OnLog?.Invoke(msg);
+
+		// 2. [新增] 将日志推送到网页控制台缓存
+		// 这样网页端刷新时就能看到这条日志了
+		WebDashboard.AddLog(msg);
+	}
 }

@@ -24,3 +24,4 @@ F:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.dll
 F:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\refint\BkyhBot.dll
 F:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\BkyhBot.pdb
 F:\code\BkyhBot\BkyhBot\BkyhBot\obj\Debug\net10.0\ref\BkyhBot.dll
+F:\code\BkyhBot\BkyhBot\BkyhBot\bin\Debug\net10.0\wwwroot\index.html
