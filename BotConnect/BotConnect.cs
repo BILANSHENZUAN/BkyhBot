@@ -6,7 +6,8 @@ using BkyhBot.BotAction;
 using BkyhBot.Class;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using BkyhBot.Web; // [新增] 引入 Web 命名空间，确保能调用 WebDashboard
+using BkyhBot.Web;
+using System.Threading; // [新增] 确保引用，用于 SemaphoreSlim 和 CancellationToken
 
 namespace BkyhBot.BotConnect;
 
@@ -16,6 +17,9 @@ public class BotConnect
 	private CancellationTokenSource? _cts;
 	private readonly ConcurrentDictionary<string, WebSocket> _activeBots = new();
 	private static BotConnect? _instance;
+
+	// 锁：防止并发重启
+	private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
 
 	public Config Config { get; private set; }
 	public List<PlugMessage> PlugMessageList { get; set; } = new();
@@ -30,7 +34,6 @@ public class BotConnect
 	public event Action<RequestEvent>? OnRequestReceived;
 	public event Action<MetaEvent>? OnMetaEventReceived;
 	public event Action<JObject, string>? OnOtherEventReceived;
-
 	public event Action<string>? OnLog;
 	public event Action? BotOnline;
 	public event Action<BotConnect>? StartFinish;
@@ -49,91 +52,100 @@ public class BotConnect
 		Config = config ?? throw new ArgumentNullException(nameof(config));
 		if (string.IsNullOrWhiteSpace(Config.Url)) throw new ArgumentException("监听 URL 不能为空");
 		if (!Config.Url.EndsWith("/")) Config.Url += "/";
-		string initialId = Config.BotQq ?? "";
-		Sender = new BotActionSender(_activeBots, Log, initialId);
 
-		// ================== [新增] 启动网页控制台 ==================
-		// 使用 _ = 丢弃 Task，让它在后台异步运行，不阻塞主线程
+		Sender = new BotActionSender(_activeBots, Log, Config.BotQq ?? "");
+
+		// 启动网页控制台
 		try
 		{
 			_ = WebDashboard.StartAsync(Config);
-			Log($"[Web] 网页后台正在启动... 地址: {Config.WebDashboardUrl}");
+			Log($"[Web] 网页后台启动成功: {Config.WebDashboardUrl}");
 		}
 		catch (Exception ex)
 		{
 			Log($"[Web] 网页后台启动失败: {ex.Message}");
 		}
-		// =========================================================
 	}
 
 	private static Config LoadOrInitConfig()
 	{
 		string configPath = Path.Combine("Configs", "Config.json");
-		Console.WriteLine($"[系统] 配置文件路径: {Path.GetFullPath(configPath)}");
 		if (!File.Exists(configPath))
 		{
-			try
+			string dir = Path.GetDirectoryName(configPath)!;
+			if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+			var defaultConfig = new Config
 			{
-				string dir = Path.GetDirectoryName(configPath)!;
-				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-				var defaultConfig = new Config
-				{
-					Url = "http://127.0.0.1:3001/", BotQq = "123456789", MasterQq = "987654321", PlugConfigPath = "Plugins/",
-					EnableAllGroups = false, GroupWhiteList = new List<string>(), GroupBlackList = new List<string>(),
-					PrivateWhiteList = new List<string>(), PrivateBlackList = new List<string>(),
-					// 初始化默认的 Web 配置
-					WebDashboardUrl = "http://*:5000",
-					WebAdminSecret = "123456"
-				};
-				string json = JsonConvert.SerializeObject(defaultConfig, Formatting.Indented);
-				File.WriteAllText(configPath, json);
-				throw new FileNotFoundException($"[初次运行] 已生成配置文件：{configPath}");
-			}
-			catch (Exception ex) when (ex is not FileNotFoundException)
-			{
-				throw new Exception($"无法创建配置文件: {ex.Message}");
-			}
+				Url = "http://127.0.0.1:3001/", BotQq = "123456789", MasterQq = "987654321", PlugConfigPath = "Plugins/",
+				EnableAllGroups = false, GroupWhiteList = new List<string>(), GroupBlackList = new List<string>(),
+				PrivateWhiteList = new List<string>(), PrivateBlackList = new List<string>(),
+				WebDashboardUrl = "http://*:5000", WebAdminSecret = "123456"
+			};
+			File.WriteAllText(configPath, JsonConvert.SerializeObject(defaultConfig, Formatting.Indented));
+			throw new FileNotFoundException($"[初次运行] 已生成配置文件：{configPath}");
 		}
 
-		try
-		{
-			return JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath)) ?? new Config();
-		}
-		catch (Exception ex)
-		{
-			throw new Exception($"配置文件读取失败: {ex.Message}");
-		}
+		return JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath)) ?? new Config();
 	}
 
 	public async Task Start()
 	{
-		if (_listener?.IsListening == true) return;
-		_listener = new HttpListener();
-		_listener.Prefixes.Add(Config.Url);
+		await _lifecycleLock.WaitAsync();
 		try
 		{
+			if (_listener?.IsListening == true) return;
+
+			_listener = new HttpListener();
+			_listener.Prefixes.Add(Config.Url);
 			_listener.Start();
+
 			_cts = new CancellationTokenSource();
-			Log($"[系统] 监听启动 | {Config.Url}");
+			Log($"[系统] 监听启动成功 | 端口: {Config.Url}");
+
 			_ = AcceptConnectionsLoop(_cts.Token);
 			StartFinish?.Invoke(this);
 		}
 		catch (HttpListenerException ex)
 		{
-			Log($"[启动失败] 端口被占用: {ex.Message}");
+			Log($"[启动失败] 端口可能被占用: {ex.Message}");
 			throw;
+		}
+		finally
+		{
+			_lifecycleLock.Release();
 		}
 	}
 
 	public void Stop()
 	{
-		_cts?.Cancel();
-		_listener?.Stop();
+		try
+		{
+			_cts?.Cancel();
+			_cts?.Dispose();
+		}
+		catch
+		{
+		}
+
+		_cts = null;
+
+		try
+		{
+			if (_listener != null)
+			{
+				_listener.Close();
+				_listener = null;
+			}
+		}
+		catch (Exception ex)
+		{
+			Log($"[停止异常] {ex.Message}");
+		}
+
 		foreach (var pair in _activeBots)
 		{
 			try
 			{
-				pair.Value.Abort();
 				pair.Value.Dispose();
 			}
 			catch
@@ -142,7 +154,77 @@ public class BotConnect
 		}
 
 		_activeBots.Clear();
-		Log("[系统] 服务已停止");
+		Log("[系统] 服务已停止，资源已释放。");
+	}
+
+	public async Task Restart()
+	{
+		await _lifecycleLock.WaitAsync();
+		try
+		{
+			Log("[系统] 正在执行重启序列... (ง •_•)ง");
+
+			try
+			{
+				_cts?.Cancel();
+				_listener?.Close();
+				foreach (var b in _activeBots) b.Value.Dispose();
+				_activeBots.Clear();
+			}
+			catch
+			{
+			}
+
+			_listener = null;
+
+			Log("[系统] 已断开连接，正在等待端口释放...");
+
+			int retryCount = 0;
+			const int maxRetries = 5;
+			bool success = false;
+
+			while (retryCount < maxRetries)
+			{
+				retryCount++;
+				await Task.Delay(1500);
+
+				try
+				{
+					_listener = new HttpListener();
+					_listener.Prefixes.Add(Config.Url);
+					_listener.Start();
+
+					_cts = new CancellationTokenSource();
+					_ = AcceptConnectionsLoop(_cts.Token);
+
+					success = true;
+					Log($"[系统] 第 {retryCount} 次尝试启动成功！欢迎回来~");
+					break;
+				}
+				catch (Exception ex)
+				{
+					Log($"[系统] 第 {retryCount} 次启动失败 (端口可能仍被占用): {ex.Message}");
+					try
+					{
+						_listener?.Close();
+					}
+					catch
+					{
+					}
+
+					_listener = null;
+				}
+			}
+
+			if (!success)
+			{
+				Log($"[系统] ❌ 严重错误: 重试 {maxRetries} 次后仍无法启动。请检查是否有其他程序占用了端口。");
+			}
+		}
+		finally
+		{
+			_lifecycleLock.Release();
+		}
 	}
 
 	private async Task AcceptConnectionsLoop(CancellationToken ct)
@@ -152,16 +234,23 @@ public class BotConnect
 			try
 			{
 				var context = await _listener.GetContextAsync();
-				if (context.Request.IsWebSocketRequest) _ = HandleWebsocketHandshake(context, ct);
+				if (context.Request.IsWebSocketRequest)
+					_ = HandleWebsocketHandshake(context, ct);
 				else
 				{
 					context.Response.StatusCode = 400;
 					context.Response.Close();
 				}
 			}
-			catch (Exception ex) when (ex is not OperationCanceledException)
+			catch (Exception ex)
 			{
-				if (_listener?.IsListening == true) Log($"[监听异常] {ex.Message}");
+				if (!ct.IsCancellationRequested)
+				{
+					if (ex is ObjectDisposedException || ex is HttpListenerException)
+						break;
+
+					Log($"[监听循环异常] {ex.Message}");
+				}
 			}
 		}
 	}
@@ -207,6 +296,8 @@ public class BotConnect
 			Sender = new BotActionSender(_activeBots, Log, botId);
 			Log($"[连接] 机器人 {botId} 已接入");
 			BotOnline?.Invoke();
+
+			// [关键调用] 这里调用 ReceiveMessageLoop
 			await ReceiveMessageLoop(socket, botId, ct);
 		}
 		catch (Exception ex)
@@ -224,6 +315,7 @@ public class BotConnect
 		}
 	}
 
+	// [关键修复] 确保这个方法存在且在 BotConnect 类内部！
 	private async Task ReceiveMessageLoop(WebSocket socket, string botId, CancellationToken ct)
 	{
 		var buffer = new byte[1024 * 128];
@@ -304,6 +396,8 @@ public class BotConnect
 	private void HandleMessage(JObject jsonObj)
 	{
 		string? msgType = jsonObj["message_type"]?.ToString();
+		string content = jsonObj["raw_message"]?.ToString() ?? "";
+
 		if (msgType == "group")
 		{
 			var groupEvent = jsonObj.ToObject<GroupMessageEvent>();
@@ -314,6 +408,7 @@ public class BotConnect
 				if (Config.GroupWhiteList == null || !Config.GroupWhiteList.Contains(groupEvent.GroupId)) return;
 			}
 
+			Log($"[群聊] 群[{groupEvent.GroupId}] 用户[{groupEvent.UserId}]: {content}");
 			OnGroupMessageReceived?.Invoke(groupEvent);
 		}
 		else if (msgType == "private")
@@ -326,6 +421,7 @@ public class BotConnect
 				if (!Config.PrivateWhiteList.Contains(privateEvent.UserId)) return;
 			}
 
+			Log($"[私聊] 用户[{privateEvent.UserId}]: {content}");
 			OnPrivateMessageReceived?.Invoke(privateEvent);
 		}
 		else
@@ -334,16 +430,10 @@ public class BotConnect
 		}
 	}
 
-	/// <summary>
-	/// 统一日志方法
-	/// </summary>
 	private void Log(string msg)
 	{
-		// 1. 触发原有的控制台/界面日志事件
 		OnLog?.Invoke(msg);
-
-		// 2. [新增] 将日志推送到网页控制台缓存
-		// 这样网页端刷新时就能看到这条日志了
 		WebDashboard.AddLog(msg);
+		Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {msg}");
 	}
 }
