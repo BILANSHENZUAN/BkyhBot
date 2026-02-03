@@ -85,7 +85,6 @@ public abstract class Plug<T, TA>
 
 		// 3. 加载配置
 		_instance.LoadConfig(path);
-
 		// 4. 执行子类的初始化逻辑 (如果有的话)
 		_instance.OnInit();
 		
